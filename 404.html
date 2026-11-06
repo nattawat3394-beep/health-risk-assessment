@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบลงทะเบียนและประเมินความเสี่ยงสุขภาพเบื้องต้น | Patient Health Risk Assessment</title>
+  
+  <!-- Google Fonts: Prompt & Roboto -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  
+  <!-- Material Icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel Standalone -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Material-UI (MUI v5) -->
+  <script src="https://unpkg.com/@mui/material@5.15.15/umd/material-ui.production.min.js" crossorigin></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Prompt', 'Roboto', sans-serif !important;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #f0f7f9 0%, #e8f4f8 100%);
+      min-height: 100vh;
+      color: #2c3e50;
+    }
+    .print-only {
+      display: none;
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      .print-dialog, .print-dialog * {
+        visibility: visible;
+      }
+      .print-dialog {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 20px;
+        box-shadow: none !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const {
+      Container, Paper, Grid, Stack, TextField, RadioGroup, Radio,
+      FormControlLabel, FormControl, FormLabel, InputLabel, Select, MenuItem,
+      Button, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
+      Chip, Typography, Box, Divider, Card, CardContent, AppBar, Toolbar,
+      IconButton, Tooltip, Table, TableBody, TableCell, TableContainer,
+      TableHead, TableRow, createTheme, ThemeProvider, CssBaseline
+    } = MaterialUI;
+
+    // Custom Theme with Prompt font & Medical Color Palette
+    const theme = createTheme({
+      typography: {
+        fontFamily: ['Prompt', 'Roboto', 'sans-serif'].join(','),
+      },
+      palette: {
+        primary: {
+          main: '#0284c7', // Medical Cyan/Sky Blue
+          dark: '#0369a1',
+          light: '#38bdf8',
+          contrastText: '#ffffff',
+        },
+        secondary: {
+          main: '#0d9488', // Teal
+          dark: '#0f766e',
+          light: '#2dd4bf',
+        },
+        success: {
+          main: '#16a34a',
+          light: '#dcfce7',
+        },
+        warning: {
+          main: '#ea580c',
+          light: '#ffedd5',
+        },
+        error: {
+          main: '#dc2626',
+          light: '#fee2e2',
+        },
+        background: {
+          default: '#f8fafc',
+          paper: '#ffffff',
+        },
+      },
+      shape: {
+        borderRadius: 12,
+      },
+    });
+
+    function App() {
+      // Form State
+      const [formData, setFormData] = React.useState({
+        fullName: '',
+        age: '',
+        gender: 'ชาย',
+        weight: '',
+        height: '',
+        smoking: 'ไม่สูบ',
+        alcohol: 'ไม่ดื่ม',
+        chronicDisease: 'ไม่มี',
+      });
+
+      // Validation & Alert State
+      const [errors, setErrors] = React.useState({});
+      const [alertInfo, setAlertInfo] = React.useState({ show: false, message: '', severity: 'error' });
+
+      // Assessment Result State
+      const [result, setResult] = React.useState(null);
+      const [dialogOpen, setDialogOpen] = React.useState(false);
+
+      // History / Records for front desk staff
+      const [records, setRecords] = React.useState([
+        {
+          id: 'PT-1001',
+          fullName: 'สมชาย รักสงบ',
+          age: 45,
+          gender: 'ชาย',
+          weight: 78,
+          height: 168,
+          bmi: 27.64,
+          bmiCategory: 'โรคอ้วนระดับ 1 (น้ำหนักเกินเกณฑ์)',
+          riskLevel: 'ความเสี่ยงปานกลาง',
+          riskColor: 'warning',
+          smoking: 'สูบเป็นประจำ',
+          chronicDisease: 'โรคความดันโลหิตสูง',
+          timestamp: '06/11/2026 10:15',
+        },
+        {
+          id: 'PT-1002',
+          fullName: 'วิภาดา ใจดี',
+          age: 28,
+          gender: 'หญิง',
+          weight: 52,
+          height: 162,
+          bmi: 19.81,
+          bmiCategory: 'น้ำหนักปกติ สมส่วน',
+          riskLevel: 'ความเสี่ยงต่ำ',
+          riskColor: 'success',
+          smoking: 'ไม่สูบ',
+          chronicDisease: 'ไม่มี',
+          timestamp: '06/11/2026 11:20',
+        }
+      ]);
+
+      // Handle Input Changes
+      const handleChange = (field) => (e) => {
+        setFormData({
+          ...formData,
+          [field]: e.target.value,
+        });
+        if (errors[field]) {
+          setErrors({ ...errors, [field]: '' });
+        }
+        if (alertInfo.show) {
+          setAlertInfo({ show: false, message: '', severity: 'error' });
+        }
+      };
+
+      // Input Validation Logic
+      const validate = () => {
+        const newErrors = {};
+        let isValid = true;
+
+        if (!formData.fullName.trim()) {
+          newErrors.fullName = 'กรุณากรอกชื่อ-นามสกุล';
+          isValid = false;
+        }
+
+        const ageNum = Number(formData.age);
+        if (!formData.age || isNaN(ageNum) || ageNum <= 0 || ageNum > 120) {
+          newErrors.age = 'กรุณากรอกอายุที่ถูกต้อง (1 - 120 ปี)';
+          isValid = false;
+        }
+
+        const weightNum = Number(formData.weight);
+        if (!formData.weight || isNaN(weightNum) || weightNum <= 10 || weightNum > 300) {
+          newErrors.weight = 'กรุณากรอกน้ำหนักที่ถูกต้อง (10 - 300 กก.)';
+          isValid = false;
+        }
+
+        const heightNum = Number(formData.height);
+        if (!formData.height || isNaN(heightNum) || heightNum <= 40 || heightNum > 250) {
+          newErrors.height = 'กรุณากรอกส่วนสูงที่ถูกต้อง (40 - 250 ซม.)';
+          isValid = false;
+        }
+
+        setErrors(newErrors);
+
+        if (!isValid) {
+          setAlertInfo({
+            show: true,
+            message: 'พบข้อมูลว่างหรือไม่ถูกต้อง กรุณาตรวจสอบช่องที่มีข้อความเตือนสีแดงก่อนประเมินผล',
+            severity: 'error',
+          });
+        }
+
+        return isValid;
+      };
+
+      // Calculate BMI & Risk Assessment Logic
+      const handleAssess = () => {
+        if (!validate()) return;
+
+        const weight = parseFloat(formData.weight);
+        const heightMeters = parseFloat(formData.height) / 100;
+        const bmi = parseFloat((weight / (heightMeters * heightMeters)).toFixed(2));
+        const age = parseInt(formData.age, 10);
+
+        // BMI Categorization (Asian WHO Guidelines)
+        let bmiCategory = '';
+        if (bmi < 18.5) {
+          bmiCategory = 'น้ำหนักน้อยกว่าเกณฑ์ (Underweight)';
+        } else if (bmi <= 22.9) {
+          bmiCategory = 'น้ำหนักปกติ สมส่วน (Normal Weight)';
+        } else if (bmi <= 24.9) {
+          bmiCategory = 'ท้วม / น้ำหนักเกินเกณฑ์ (Overweight)';
+        } else if (bmi <= 29.9) {
+          bmiCategory = 'โรคอ้วนระดับ 1 (Obesity Class I)';
+        } else {
+          bmiCategory = 'โรคอ้วนระดับ 2 (Obesity Class II / Severe)';
+        }
+
+        // Multi-factor Risk Assessment Logic
+        // Factors: BMI, Smoking, Chronic Disease, Age
+        let riskScore = 0;
+
+        // BMI contribution
+        if (bmi >= 30) riskScore += 3;
+        else if (bmi >= 25) riskScore += 2;
+        else if (bmi >= 23 || bmi < 18.5) riskScore += 1;
+
+        // Smoking contribution
+        if (formData.smoking === 'สูบเป็นประจำ') riskScore += 3;
+        else if (formData.smoking === 'เคยสูบแต่เลิกแล้ว') riskScore += 1;
+
+        // Alcohol contribution
+        if (formData.alcohol === 'ดื่มเป็นประจำ') riskScore += 2;
+        else if (formData.alcohol === 'ดื่มเป็นครั้งคราว') riskScore += 1;
+
+        // Chronic Diseases contribution
+        const highRiskDiseases = ['โรคหัวใจและหลอดเลือด', 'โรคไตเรื้อรัง', 'มีหลายโรคเรื้อรังร่วมกัน'];
+        const modRiskDiseases = ['โรคเบาหวาน', 'โรคความดันโลหิตสูง', 'โรคระบบทางเดินหายใจเรื้อรัง', 'โรคอื่นๆ'];
+
+        if (highRiskDiseases.includes(formData.chronicDisease)) {
+          riskScore += 4;
+        } else if (modRiskDiseases.includes(formData.chronicDisease)) {
+          riskScore += 2;
+        }
+
+        // Age factor
+        if (age >= 60) riskScore += 2;
+        else if (age >= 45) riskScore += 1;
+
+        // Categorize into 3 specific levels required:
+        // 1. ความเสี่ยงต่ำ (Low Risk)
+        // 2. ความเสี่ยงปานกลาง (Moderate Risk)
+        // 3. ความเสี่ยงสูง (High Risk)
+        let riskLevel = '';
+        let riskColor = 'success'; // for Chip
+        let recommendations = [];
+
+        if (riskScore >= 5 || highRiskDiseases.includes(formData.chronicDisease) || bmi >= 32) {
+          riskLevel = 'ความเสี่ยงสูง (High Risk)';
+          riskColor = 'error';
+          recommendations = [
+            'ควรได้รับการตรวจคัดกรองอย่างละเอียดและเข้าพบแพทย์ผู้เชี่ยวชาญโดยเร็ว',
+            'ตรวจวัดสัญญาณชีพ (ความดันโลหิต, อัตราชีพจร) และตรวจเลือดเพิ่มเติม',
+            'งดสูบบุหรี่และเครื่องดื่มแอลกอฮอล์โดยเด็ดขาดเพื่อป้องกันภาวะแทรกซ้อน',
+            'ควรมีผู้ดูแลร่วมรับฟังคำแนะนำจากแพทย์และติดตามอาการอย่างใกล้ชิด',
+          ];
+        } else if (riskScore >= 2 || formData.chronicDisease !== 'ไม่มี' || bmi >= 25 || formData.smoking === 'สูบเป็นประจำ') {
+          riskLevel = 'ความเสี่ยงปานกลาง (Moderate Risk)';
+          riskColor = 'warning';
+          recommendations = [
+            'ควรรับคำปรึกษาจากแพทย์หรือบุคลากรสาธารณสุขเพื่อเฝ้าระวังปัจจัยเสี่ยง',
+            'ปรับเปลี่ยนพฤติกรรมการบริโภคอาหาร ลดหวาน มัน เค็ม',
+            'ออกกำลังกายแบบแอโรบิกอย่างน้อย 150 นาทีต่อสัปดาห์',
+            'ลดหรือเลิกสูบบุหรี่และจำกัดปริมาณเครื่องดื่มแอลกอฮอล์',
+            'นัดหมายตรวจติดตามระดับน้ำตาล ความดัน และไขมันในเลือดทุก 3-6 เดือน',
+          ];
+        } else {
+          riskLevel = 'ความเสี่ยงต่ำ (Low Risk)';
+          riskColor = 'success';
+          recommendations = [
+            'สุขภาพอยู่ในเกณฑ์ดี ควรคงพฤติกรรมการดำเนินชีวิตที่ดีต่อสุขภาพ',
+            'รับประทานอาหารให้ครบ 5 หมู่ ดื่มน้ำสะอาดอย่างเพียงพอ',
+            'ออกกำลังกายสม่ำเสมอ พักผ่อนให้เพียงพอ 7-8 ชั่วโมงต่อวัน',
+            'ตรวจสุขภาพประจำปีอย่างน้อยปีละ 1 ครั้ง เพื่อคัดกรองโรคที่อาจเกิดขึ้นตามวัย',
+          ];
+        }
+
+        const assessmentResult = {
+          id: `PT-${Math.floor(1000 + Math.random() * 9000)}`,
+          fullName: formData.fullName,
+          age: age,
+          gender: formData.gender,
+          weight: weight,
+          height: parseFloat(formData.height),
+          bmi: bmi,
+          bmiCategory: bmiCategory,
+          riskLevel: riskLevel,
+          riskColor: riskColor,
+          smoking: formData.smoking,
+          alcohol: formData.alcohol,
+          chronicDisease: formData.chronicDisease,
+          recommendations: recommendations,
+          timestamp: new Date().toLocaleString('th-TH', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        };
+
+        setResult(assessmentResult);
+        setDialogOpen(true);
+
+        // Add to recent records
+        setRecords((prev) => [assessmentResult, ...prev]);
+      };
+
+      // Reset Form
+      const handleReset = () => {
+        setFormData({
+          fullName: '',
+          age: '',
+          gender: 'ชาย',
+          weight: '',
+          height: '',
+          smoking: 'ไม่สูบ',
+          alcohol: 'ไม่ดื่ม',
+          chronicDisease: 'ไม่มี',
+        });
+        setErrors({});
+        setAlertInfo({
+          show: true,
+          message: 'ล้างข้อมูลแบบฟอร์มเรียบร้อยแล้ว',
+          severity: 'info',
+        });
+      };
+
+      return (
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+
+          {/* Top AppBar */}
+          <AppBar position="sticky" elevation={2} sx={{ bgcolor: '#0284c7' }}>
+            <Toolbar sx={{ justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <span className="material-icons" style={{ fontSize: 34, color: '#fff' }}>
+                  health_and_safety
+                </span>
+                <Box>
+                  <Typography variant="h6" component="div" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                    ระบบลงทะเบียนและประเมินความเสี่ยงสุขภาพเบื้องต้น
+                  </Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                    Patient Health Risk Assessment and Registration System
+                  </Typography>
+                </Box>
+              </Box>
+              <Chip
+                icon={<span className="material-icons" style={{ fontSize: 18, color: '#fff' }}>verified</span>}
+                label="MUI Clinical v2.0"
+                size="small"
+                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 500 }}
+              />
+            </Toolbar>
+          </AppBar>
+
+          {/* Main Content Container */}
+          <Container maxWidth="lg" sx={{ py: 4 }}>
+            {/* Feedback Alert */}
+            {alertInfo.show && (
+              <Box sx={{ mb: 3 }}>
+                <Alert
+                  severity={alertInfo.severity}
+                  onClose={() => setAlertInfo({ ...alertInfo, show: false })}
+                  sx={{ borderRadius: 2, fontSize: '0.95rem' }}
+                >
+                  {alertInfo.message}
+                </Alert>
+              </Box>
+            )}
+
+            <Grid container spacing={3}>
+              {/* Form Section */}
+              <Grid item xs={12} md={7}>
+                <Paper elevation={3} sx={{ p: { xs: 2.5, sm: 3.5 }, borderRadius: 3, border: '1px solid #e2e8f0' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                    <span className="material-icons" style={{ color: '#0284c7', fontSize: 26 }}>
+                      how_to_reg
+                    </span>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#0f172a' }}>
+                      แบบฟอร์มลงทะเบียนและคัดกรองสุขภาพ
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    กรุณากรอกข้อมูลผู้ป่วยให้ครบถ้วนเพื่อทำการคำนวณ BMI และประเมินระดับความเสี่ยงสุขภาพ
+                  </Typography>
+
+                  <Divider sx={{ mb: 3 }} />
+
+                  <Stack spacing={3}>
+                    {/* ข้อมูลส่วนบุคคล */}
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#0284c7', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span className="material-icons" style={{ fontSize: 20 }}>person</span>
+                        1. ข้อมูลทั่วไปของผู้ป่วย
+                      </Typography>
+                      
+                      <Grid container spacing={2}>
+                        <Grid item xs={12}>
+                          <TextField
+                            fullWidth
+                            label="ชื่อ - นามสกุล ผู้ป่วย *"
+                            placeholder="ตัวอย่าง: สมหมาย ใจมั่น"
+                            value={formData.fullName}
+                            onChange={handleChange('fullName')}
+                            error={Boolean(errors.fullName)}
+                            helperText={errors.fullName || 'กรอกชื่อและนามสกุลจริง'}
+                            variant="outlined"
+                            size="medium"
+                          />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="อายุ (ปี) *"
+                            type="number"
+                            placeholder="ตัวอย่าง: 35"
+                            value={formData.age}
+                            onChange={handleChange('age')}
+                            error={Boolean(errors.age)}
+                            helperText={errors.age || 'ระบุอายุเป็นตัวเลข'}
+                            variant="outlined"
+                            inputProps={{ min: 1, max: 120 }}
+                          />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                          <FormControl component="fieldset" fullWidth sx={{ pt: 1 }}>
+                            <FormLabel component="legend" sx={{ fontSize: '0.85rem' }}>เพศ</FormLabel>
+                            <RadioGroup
+                              row
+                              value={formData.gender}
+                              onChange={handleChange('gender')}
+                            >
+                              <FormControlLabel value="ชาย" control={<Radio size="small" />} label="ชาย" />
+                              <FormControlLabel value="หญิง" control={<Radio size="small" />} label="หญิง" />
+                              <FormControlLabel value="อื่นๆ" control={<Radio size="small" />} label="อื่นๆ" />
+                            </RadioGroup>
+                          </FormControl>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="น้ำหนัก (กก.) *"
+                            type="number"
+                            placeholder="ตัวอย่าง: 65.5"
+                            value={formData.weight}
+                            onChange={handleChange('weight')}
+                            error={Boolean(errors.weight)}
+                            helperText={errors.weight || 'หน่วย: กิโลกรัม'}
+                            variant="outlined"
+                            inputProps={{ step: '0.1', min: 10, max: 300 }}
+                          />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="ส่วนสูง (ซม.) *"
+                            type="number"
+                            placeholder="ตัวอย่าง: 170"
+                            value={formData.height}
+                            onChange={handleChange('height')}
+                            error={Boolean(errors.height)}
+                            helperText={errors.height || 'หน่วย: เซนติเมตร'}
+                            variant="outlined"
+                            inputProps={{ step: '0.5', min: 40, max: 250 }}
+                          />
+                        </Grid>
+                      </Grid>
+                    </Box>
+
+                    <Divider />
+
+                    {/* พฤติกรรมความเสี่ยงและโรคประจำตัว */}
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#0284c7', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span className="material-icons" style={{ fontSize: 20 }}>medical_services</span>
+                        2. พฤติกรรมความเสี่ยงและประวัติสุขภาพ
+                      </Typography>
+
+                      <Grid container spacing={2.5}>
+                        {/* พฤติกรรมการสูบบุหรี่ (RadioGroup / Radio) */}
+                        <Grid item xs={12}>
+                          <FormControl component="fieldset" fullWidth>
+                            <FormLabel component="legend" sx={{ fontWeight: 500, color: '#334155', mb: 0.5 }}>
+                              พฤติกรรมการสูบบุหรี่ (Smoking Behavior) *
+                            </FormLabel>
+                            <RadioGroup
+                              row
+                              value={formData.smoking}
+                              onChange={handleChange('smoking')}
+                            >
+                              <FormControlLabel value="ไม่สูบ" control={<Radio color="primary" />} label="ไม่เคยสูบบุหรี่" />
+                              <FormControlLabel value="เคยสูบแต่เลิกแล้ว" control={<Radio color="primary" />} label="เคยสูบแต่เลิกแล้ว" />
+                              <FormControlLabel value="สูบเป็นประจำ" control={<Radio color="error" />} label="สูบเป็นประจำ" />
+                            </RadioGroup>
+                          </FormControl>
+                        </Grid>
+
+                        {/* การดื่มเครื่องดื่มแอลกอฮอล์ (RadioGroup / Radio) */}
+                        <Grid item xs={12}>
+                          <FormControl component="fieldset" fullWidth>
+                            <FormLabel component="legend" sx={{ fontWeight: 500, color: '#334155', mb: 0.5 }}>
+                              การดื่มเครื่องดื่มแอลกอฮอล์ (Alcohol Intake)
+                            </FormLabel>
+                            <RadioGroup
+                              row
+                              value={formData.alcohol}
+                              onChange={handleChange('alcohol')}
+                            >
+                              <FormControlLabel value="ไม่ดื่ม" control={<Radio color="primary" />} label="ไม่ดื่มเลย" />
+                              <FormControlLabel value="ดื่มเป็นครั้งคราว" control={<Radio color="primary" />} label="ดื่มเป็นครั้งคราว" />
+                              <FormControlLabel value="ดื่มเป็นประจำ" control={<Radio color="warning" />} label="ดื่มเป็นประจำ" />
+                            </RadioGroup>
+                          </FormControl>
+                        </Grid>
+
+                        {/* กลุ่มโรคประจำตัว (Select / MenuItem) */}
+                        <Grid item xs={12}>
+                          <FormControl fullWidth variant="outlined">
+                            <InputLabel id="chronic-disease-label">กลุ่มโรคประจำตัว (Pre-existing Conditions) *</InputLabel>
+                            <Select
+                              labelId="chronic-disease-label"
+                              value={formData.chronicDisease}
+                              onChange={handleChange('chronicDisease')}
+                              label="กลุ่มโรคประจำตัว (Pre-existing Conditions) *"
+                            >
+                              <MenuItem value="ไม่มี">ไม่มีโรคประจำตัว (None)</MenuItem>
+                              <MenuItem value="โรคเบาหวาน">โรคเบาหวาน (Diabetes Mellitus)</MenuItem>
+                              <MenuItem value="โรคความดันโลหิตสูง">โรคความดันโลหิตสูง (Hypertension)</MenuItem>
+                              <MenuItem value="โรคหัวใจและหลอดเลือด">โรคหัวใจและหลอดเลือด (Cardiovascular Disease)</MenuItem>
+                              <MenuItem value="โรคระบบทางเดินหายใจเรื้อรัง">โรคระบบทางเดินหายใจเรื้อรัง (COPD / Asthma)</MenuItem>
+                              <MenuItem value="โรคไตเรื้อรัง">โรคไตเรื้อรัง (Chronic Kidney Disease)</MenuItem>
+                              <MenuItem value="มีหลายโรคเรื้อรังร่วมกัน">มีหลายโรคเรื้อรังร่วมกัน (Multiple Conditions)</MenuItem>
+                              <MenuItem value="โรคอื่นๆ">โรคประจำตัวอื่นๆ (Other)</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      </Grid>
+                    </Box>
+
+                    {/* Action Buttons (Button) */}
+                    <Box sx={{ pt: 1 }}>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="large"
+                          fullWidth
+                          onClick={handleAssess}
+                          startIcon={<span className="material-icons">analytics</span>}
+                          sx={{ py: 1.4, fontWeight: 600, fontSize: '1rem', textTransform: 'none', boxShadow: 3 }}
+                        >
+                          ประเมินความเสี่ยงสุขภาพ (Assess Risk)
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="inherit"
+                          size="large"
+                          onClick={handleReset}
+                          startIcon={<span className="material-icons">restart_alt</span>}
+                          sx={{ py: 1.4, px: 3, fontWeight: 500, textTransform: 'none', color: '#64748b', borderColor: '#cbd5e1' }}
+                        >
+                          ล้างข้อมูล
+                        </Button>
+                      </Stack>
+                    </Box>
+                  </Stack>
+                </Paper>
+              </Grid>
+
+              {/* Sidebar Guide & Recent Records */}
+              <Grid item xs={12} md={5}>
+                <Stack spacing={3}>
+                  {/* เกณฑ์การประเมินความรู้ */}
+                  <Paper elevation={2} sx={{ p: 3, borderRadius: 3, bgcolor: '#ffffff' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                      <span className="material-icons" style={{ color: '#0d9488' }}>info</span>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        เกณฑ์การจำแนกความเสี่ยงสุขภาพ
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      ระบบคำนวณจากสูตรดัชนีมวลกาย BMI = น้ำหนัก (kg) / [ส่วนสูง (m)]² ร่วมกับปัจจัยพฤติกรรมเสี่ยงและโรคประจำตัว:
+                    </Typography>
+
+                    <Stack spacing={1.5}>
+                      <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ color: '#166534', fontWeight: 600 }}>
+                            ความเสี่ยงต่ำ (Low Risk)
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#15803d' }}>
+                            BMI สมส่วน (18.5 - 22.9), ไม่สูบบุหรี่, ไม่มีโรคประจำตัว
+                          </Typography>
+                        </Box>
+                        <Chip label="ปลอดภัย" color="success" size="small" />
+                      </Box>
+
+                      <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ color: '#9a3412', fontWeight: 600 }}>
+                            ความเสี่ยงปานกลาง (Moderate Risk)
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#c2410c' }}>
+                            BMI เกิน (23.0 - 29.9), สูบบุหรี่ หรือมีโรคเรื้อรังทั่วไป
+                          </Typography>
+                        </Box>
+                        <Chip label="เฝ้าระวัง" color="warning" size="small" />
+                      </Box>
+
+                      <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ color: '#991b1b', fontWeight: 600 }}>
+                            ความเสี่ยงสูง (High Risk)
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#b91c1c' }}>
+                            BMI ≥ 30, มีโรคหัวใจ/ไต หรือมีหลายปัจจัยเสี่ยงร่วม
+                          </Typography>
+                        </Box>
+                        <Chip label="พบแพทย์ด่วน" color="error" size="small" />
+                      </Box>
+                    </Stack>
+                  </Paper>
+
+                  {/* ประวัติการลงทะเบียนล่าสุด (Staff Dashboard) */}
+                  <Paper elevation={2} sx={{ p: 3, borderRadius: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span className="material-icons" style={{ color: '#0284c7' }}>history</span>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                          บันทึกการคัดกรองล่าสุด ({records.length})
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {records.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 3 }}>
+                        ยังไม่มีข้อมูลการคัดกรอง
+                      </Typography>
+                    ) : (
+                      <Stack spacing={1.5} sx={{ maxHeight: 320, overflowY: 'auto', pr: 0.5 }}>
+                        {records.map((item, index) => (
+                          <Box
+                            key={index}
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2,
+                              border: '1px solid #e2e8f0',
+                              bgcolor: '#f8fafc',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              transition: 'all 0.2s',
+                              '&:hover': { bgcolor: '#f1f5f9', cursor: 'pointer' },
+                            }}
+                            onClick={() => {
+                              setResult(item);
+                              setDialogOpen(true);
+                            }}
+                          >
+                            <Box>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                                {item.fullName}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                อายุ {item.age} ปี • BMI: {item.bmi} • {item.chronicDisease}
+                              </Typography>
+                            </Box>
+                            <Chip
+                              label={item.riskLevel.split(' ')[0]}
+                              color={item.riskColor}
+                              size="small"
+                              sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                            />
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                  </Paper>
+                </Stack>
+              </Grid>
+            </Grid>
+          </Container>
+
+          {/* Dialog สรุปผลการประเมิน (Feedback & Displays) */}
+          <Dialog
+            open={dialogOpen}
+            onClose={() => setDialogOpen(false)}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+              sx: { borderRadius: 3, p: 1 },
+              className: 'print-dialog',
+            }}
+          >
+            {result && (
+              <>
+                <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <span className="material-icons" style={{ color: '#0284c7', fontSize: 32 }}>
+                      assignment_turned_in
+                    </span>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                        ใบสรุปผลการคัดกรองและประเมินความเสี่ยงสุขภาพ
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        รหัสผู้ป่วย: {result.id} | วันที่ประเมิน: {result.timestamp}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <IconButton onClick={() => setDialogOpen(false)} size="small" className="no-print">
+                    <span className="material-icons">close</span>
+                  </IconButton>
+                </DialogTitle>
+
+                <DialogContent dividers sx={{ py: 2.5 }}>
+                  <Stack spacing={2.5}>
+                    {/* ข้อมูลผู้ป่วย */}
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        ข้อมูลส่วนบุคคล
+                      </Typography>
+                      <Grid container spacing={1.5}>
+                        <Grid item xs={6}>
+                          <Typography variant="body2"><strong>ชื่อ-นามสกุล:</strong> {result.fullName}</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="body2"><strong>เพศ / อายุ:</strong> {result.gender} / {result.age} ปี</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="body2"><strong>น้ำหนัก:</strong> {result.weight} กก.</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="body2"><strong>ส่วนสูง:</strong> {result.height} ซม.</Typography>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+
+                    {/* ค่า BMI และ ระดับความเสี่ยง (Chip component) */}
+                    <Box sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      textAlign: 'center',
+                      bgcolor: result.riskColor === 'success' ? '#f0fdf4' : result.riskColor === 'warning' ? '#fff7ed' : '#fef2f2',
+                      border: `1.5px solid ${result.riskColor === 'success' ? '#86efac' : result.riskColor === 'warning' ? '#fdba74' : '#fca5a5'}`,
+                    }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        ผลการคำนวณดัชนีมวลกาย (Body Mass Index)
+                      </Typography>
+                      <Typography variant="h3" sx={{ fontWeight: 800, color: result.riskColor === 'success' ? '#15803d' : result.riskColor === 'warning' ? '#c2410c' : '#b91c1c' }}>
+                        {result.bmi} <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>kg/m²</span>
+                      </Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mt: 0.5 }}>
+                        สถานะ: {result.bmiCategory}
+                      </Typography>
+
+                      <Divider sx={{ my: 2 }} />
+
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        ผลการประเมินระดับความเสี่ยงสุขภาพโดยรวม:
+                      </Typography>
+                      
+                      {/* MUI Chip */}
+                      <Chip
+                        icon={
+                          <span className="material-icons" style={{ color: '#fff', fontSize: 20 }}>
+                            {result.riskColor === 'success' ? 'check_circle' : result.riskColor === 'warning' ? 'warning' : 'dangerous'}
+                          </span>
+                        }
+                        label={result.riskLevel}
+                        color={result.riskColor}
+                        sx={{ fontSize: '1.05rem', py: 2.5, px: 2, fontWeight: 700 }}
+                      />
+                    </Box>
+
+                    {/* ปัจจัยสุขภาพที่ตรวจพบ */}
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        ปัจจัยสุขภาพและพฤติกรรมที่บันทึก:
+                      </Typography>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Chip label={`สูบบุหรี่: ${result.smoking}`} size="small" variant="outlined" />
+                        <Chip label={`แอลกอฮอล์: ${result.alcohol || 'ไม่ดื่ม'}`} size="small" variant="outlined" />
+                        <Chip label={`โรคประจำตัว: ${result.chronicDisease}`} size="small" variant="outlined" color={result.chronicDisease !== 'ไม่มี' ? 'primary' : 'default'} />
+                      </Stack>
+                    </Box>
+
+                    {/* ข้อแนะนำการปฏิบัติตน */}
+                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f1f5f9' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <span className="material-icons" style={{ fontSize: 18, color: '#0284c7' }}>lightbulb</span>
+                        ข้อแนะนำการปฏิบัติตน (Guidance & Instructions):
+                      </Typography>
+                      <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                        {result.recommendations && result.recommendations.map((rec, idx) => (
+                          <Typography component="li" variant="body2" key={idx} sx={{ mb: 0.5, color: '#334155' }}>
+                            {rec}
+                          </Typography>
+                        ))}
+                      </Box>
+                    </Box>
+                  </Stack>
+                </DialogContent>
+
+                <DialogActions sx={{ p: 2, gap: 1 }} className="no-print">
+                  <Button
+                    variant="outlined"
+                    startIcon={<span className="material-icons">print</span>}
+                    onClick={() => window.print()}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    พิมพ์ใบสรุปผล
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => setDialogOpen(false)}
+                    sx={{ textTransform: 'none', px: 3 }}
+                  >
+                    ปิดหน้าต่าง
+                  </Button>
+                </DialogActions>
+              </>
+            )}
+          </Dialog>
+
+          {/* Footer */}
+          <Box sx={{ mt: 6, py: 3, textAlign: 'center', borderTop: '1px solid #e2e8f0', bgcolor: '#ffffff' }} className="no-print">
+            <Typography variant="body2" color="text.secondary">
+              © 2026 ระบบประเมินความเสี่ยงสุขภาพเบื้องต้น (Patient Health Risk Assessment System) • พัฒนาด้วย React & MUI Component
+            </Typography>
+          </Box>
+        </ThemeProvider>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
